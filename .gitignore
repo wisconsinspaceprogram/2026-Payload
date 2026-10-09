@@ -67,3 +67,6 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Stray main_control binary built in the repo root
+/main_control
