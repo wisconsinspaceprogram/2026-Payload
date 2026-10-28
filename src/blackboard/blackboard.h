@@ -3,16 +3,14 @@
 // Blackboard: a central store of named telemetry channels.
 // Not thread-safe; use only from the main control loop.
 
-#include <chrono>
+#include <cstdint>
 #include <deque>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <variant>
 
-// Unix time (system_clock counts from 1970-01-01 UTC)
-using TimePoint = std::chrono::system_clock::time_point;
-using Value = std::variant<bool, int, float, double, std::string, TimePoint>;
+// uint32_t holds times: Unix seconds from the RTC or milliseconds from millis()
+using Value = std::variant<bool, int, uint32_t, float, double, std::string>;
 
 struct Channel {
     std::string name;
@@ -23,8 +21,9 @@ class Blackboard {
 public:
     // Add a new channel of type T and return a reference to its value, so it
     // can be read/written like a plain variable with no name lookup. The
-    // initial value is optional (defaults to 0 / false / ""). Throws
-    // std::invalid_argument if the name is empty or already registered.
+    // initial value is optional (defaults to 0 / false / ""). Halts with an
+    // error over Serial if the name is empty or already registered (the
+    // Teensy builds without exceptions, and this is always a coding mistake).
     // Example:
     //   float& roll = bb.registerChannel<float>("imu.roll");
     //   roll = 12.5f;
@@ -34,8 +33,8 @@ public:
     // rejects mismatched types), so the variant always holds this same T.
     template <typename T>
     T& registerChannel(const std::string& name, const T& initial = T{}) {
-        if (name.empty()) throw std::invalid_argument("Blackboard: empty channel name");
-        if (index_.count(name)) throw std::invalid_argument("Blackboard: duplicate channel '" + name + "'");
+        if (name.empty()) halt("Blackboard: empty channel name");
+        if (index_.count(name)) halt("Blackboard: duplicate channel '" + name + "'");
         index_[name] = channels_.size();
         channels_.push_back({name, Value{initial}});
         return std::get<T>(channels_.back().value);
@@ -61,6 +60,10 @@ public:
     const std::deque<Channel>& channels() const { return channels_; }
 
 private:
+    // Print `msg` over Serial once a second, forever, so it is seen whenever
+    // a serial monitor connects.
+    [[noreturn]] static void halt(const std::string& msg);
+
     // deque (not vector) so adding channels never moves existing ones,
     // which keeps the references returned by registerChannel valid.
     std::deque<Channel> channels_;
