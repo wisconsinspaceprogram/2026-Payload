@@ -5,6 +5,9 @@
 #include "drivers/rfm95/rfm95.h"
 #include "i2c/i2c.h"
 #include "spi/spi.h"
+#ifdef DUMMY_DATA
+#include "drivers/dummy/dummy.h"
+#endif
 
 // The Teensy core provides main(): it calls setup() once, then loop() forever.
 // Everything below is global so both can reach it. Constructors only register
@@ -30,6 +33,13 @@ I2c i2c(Wire);
 Bno055 bno055(bb, i2c);
 Spi radio_spi(SPI, 10);
 Rfm95 rfm95(bb, radio_spi);
+#ifdef DUMMY_DATA
+DummyData dummy(bb);
+#endif
+
+// Room for the whole blackboard as text; unlike the radio, serial has no
+// 255-byte limit
+char serial_line[1024];
 
 // Schedule on millis(), which never jumps; the RTC can jump when GPS
 // sets the time, which would stall or burst the loop.
@@ -64,15 +74,20 @@ void loop() {
     uptime_ms = millis();
     cycle_count++;
 
-    Serial.print("clock_time: ");
-    Serial.println(clock_time);
-    Serial.print("uptime_ms: ");
-    Serial.println(uptime_ms);
-    Serial.print("cycle_count: ");
-    Serial.println(cycle_count);
-
     // simpleRTK2B dispatch()
     bno055.dispatch();
+#ifdef DUMMY_DATA
+    dummy.dispatch();
+#endif
+
+    // Publish the whole blackboard over USB serial, one line per cycle, in
+    // the same format as the radio packet. Skipped when no monitor is
+    // connected so a full USB buffer never stalls the loop.
+    if (Serial) {
+        bb.pack(serial_line, sizeof serial_line);
+        Serial.println(serial_line);
+    }
+
     // Radio last, so the packet carries this cycle's values
     rfm95.dispatch();
 }

@@ -59,6 +59,12 @@ public:
     // All channels, in the order they were registered.
     const std::deque<Channel>& channels() const { return channels_; }
 
+    // Write channels as text, "name=value,name=value", into `out` (cap
+    // includes the terminator). Floats get 3 decimals, bools 0/1. Stops at
+    // the first channel that doesn't fit and returns the length written.
+    // Shared by the radio and the serial output so ground parses one format.
+    size_t pack(char* out, size_t cap) const;
+
 private:
     // Print `msg` over Serial once a second, forever, so it is seen whenever
     // a serial monitor connects.

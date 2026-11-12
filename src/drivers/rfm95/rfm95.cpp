@@ -1,8 +1,6 @@
 #include "drivers/rfm95/rfm95.h"
 
 #include <Arduino.h>
-#include <cstdio>
-#include <type_traits>
 
 namespace {
 
@@ -38,40 +36,6 @@ constexpr uint8_t kPaConfig = 0x8F;
 constexpr uint8_t kModemConfig2 = 0x74;
 
 constexpr size_t kMaxPayload = 255;
-
-// Write one value as text, snprintf-style: returns the length it needed
-int formatValue(char* out, size_t cap, const Value& value) {
-    return std::visit(
-        [&](const auto& v) -> int {
-            using T = std::decay_t<decltype(v)>;
-            if constexpr (std::is_same_v<T, std::string>) {
-                return snprintf(out, cap, "%s", v.c_str());
-            } else if constexpr (std::is_same_v<T, uint32_t>) {
-                return snprintf(out, cap, "%lu", static_cast<unsigned long>(v));
-            } else if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
-                return snprintf(out, cap, "%d", static_cast<int>(v));
-            } else {
-                return snprintf(out, cap, "%.3f", static_cast<double>(v));
-            }
-        },
-        value);
-}
-
-// Pack channels as "name=value,name=value" into `out`, stopping at the
-// first channel that doesn't fit. Returns the packed length.
-size_t packChannels(const std::deque<Channel>& channels, char* out, size_t cap) {
-    size_t len = 0;
-    for (const Channel& ch : channels) {
-        size_t start = len;
-        int n = snprintf(out + len, cap - len, "%s%s=", len ? "," : "", ch.name.c_str());
-        if (n < 0 || static_cast<size_t>(n) >= cap - len) return start;
-        len += n;
-        n = formatValue(out + len, cap - len, ch.value);
-        if (n < 0 || static_cast<size_t>(n) >= cap - len) return start;
-        len += n;
-    }
-    return len;
-}
 
 }  // namespace
 
@@ -117,7 +81,7 @@ void Rfm95::dispatch() {
     if ((mode & kModeMask) == kModeTx) return;
 
     char buf[kMaxPayload + 1];  // +1 for snprintf's terminator, not sent
-    size_t len = packChannels(bb_.channels(), buf, sizeof buf);
+    size_t len = bb_.pack(buf, sizeof buf);
 
     spi_.write(kRegFifoAddrPtr, 0x00);
     spi_.write(kRegFifo, reinterpret_cast<const uint8_t*>(buf), len);
