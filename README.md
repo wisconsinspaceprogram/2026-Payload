@@ -26,12 +26,4 @@ make monitor  # open the serial monitor (Ctrl+C to stop)
 make clean    # delete build output
 ```
 
-Or call PlatformIO directly:
-
-```
-pio run               # compile
-pio run -t upload     # compile and flash
-pio device monitor    # serial monitor
-```
-
 The first build downloads the Teensy toolchain, so it takes a few minutes.
